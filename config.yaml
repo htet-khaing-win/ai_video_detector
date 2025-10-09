@@ -1,0 +1,4 @@
+seed: 42
+mixed_precision: true
+log_level: INFO
+output_dir: results/
