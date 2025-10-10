@@ -1,6 +1,7 @@
 from dataset import BaseDataset
 import tensorflow as tf
 
+
 def test_synthetic_sample_shapes():
     ds = BaseDataset()
     frames, labels = ds.synthetic_sample(batch_size=2)
