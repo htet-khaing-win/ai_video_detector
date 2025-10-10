@@ -5,7 +5,9 @@ import tensorflow as tf
 import logging
 import yaml
 
+
 def setup_environment(config_path="config.yaml"):
+    """Setup environment for reproducible ML training."""
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -27,7 +29,8 @@ def setup_environment(config_path="config.yaml"):
     logging.basicConfig(
         level=getattr(logging, log_level),
         format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S"
+        datefmt="%H:%M:%S",
     )
-    logging.info(f"Environment set. Seed={seed}, Mixed precision={mixed_precision}")
+    info_msg = f"Environment set. Seed={seed}, Mixed precision={mixed_precision}"
+    logging.info(info_msg)
     return config
