@@ -1,0 +1,7 @@
+# Windows-specific dependencies
+# Install AFTER requirements.txt on Windows: pip install -r requirements-windows.txt
+
+# Intel MKL (required for PyTorch on Windows to resolve DLL dependencies)
+mkl==2025.2.0
+mkl-include==2025.2.0
+intel-openmp==2025.2.1
