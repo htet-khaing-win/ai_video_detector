@@ -1,31 +1,46 @@
-# Core (Windows GPU compatible: CUDA 11.2 + cuDNN 8.x)
-tensorflow==2.10.1
-tensorflow-estimator==2.10.0
-tensorboard==2.10.0
-protobuf==3.19.6
+# PyTorch with CUDA 12.1 support
+--index-url https://download.pytorch.org/whl/cu121
+torch==2.4.0
+torchvision==0.19.0
+torchaudio==2.4.0
+xformers==0.0.27.post2
 
-# Optional TF add-ons / datasets
-tensorflow-addons==0.19.0
-tensorflow-datasets==4.8.0
-tensorflow-io-gcs-filesystem==0.28.0
+# Intel MKL (required for PyTorch on Windows)
+mkl==2025.2.0
+mkl-include==2025.2.0
+intel-openmp==2025.2.1
 
-# Scientific / ML utilities
-numpy>=1.21.0,<1.24.0
-pandas>=1.3.0,<2.0.0
-scikit-learn==1.2.2
-scipy>=1.7.0,<1.11.0
-h5py>=3.1.0,<3.9.0
-joblib>=1.1.0
-tqdm>=4.62.0
+# Hugging Face and Transformers
+transformers==4.44.2
+accelerate==0.33.0
+bitsandbytes==0.43.1
+safetensors==0.4.4
+datasets==3.0.2
+huggingface-hub==0.24.5
 
-# Computer vision & IO
-opencv-python-headless==4.7.0.72
-Pillow>=9.0.0,<10.0.0
+# Computer Vision and Image Processing
+opencv-python==4.10.0.84
+Pillow==10.4.0
 
-# Dev helpers / HTTP / templates
-requests>=2.27.0
-jinja2>=3.0.0
-attrs>=21.0.0
-werkzeug>=2.0.0,<3.0.0
-pyyaml==6.0
+# Scientific Computing
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.13.1
+scikit-learn==1.5.2
 
+# Utilities
+tqdm==4.66.5
+pyyaml==6.0.2
+
+# Logging and Visualization
+wandb==0.17.7
+matplotlib==3.9.2
+
+# System Utilities
+psutil==5.9.8
+
+# NVIDIA CUDA Dependencies (included with PyTorch, but listed for clarity)
+nvidia-cudnn-cu12==9.1.0.70
+nvidia-cublas-cu12==12.4.5.8
+nvidia-cuda-runtime-cu12==12.4.127
+nvidia-nvtx-cu12==12.4.127
