@@ -25,19 +25,20 @@ def default_transforms(resize=224):
     ])
 
 class GenBusterDataset(Dataset):
-    def __init__(self, metadata_csv, cache_root="data/processed/genbuster_cached", max_frames=8, resize=224, transforms=None, clip_mode=True):
+    def __init__(self, metadata_csv, cache_root="data/processed/genbuster_cached",
+                 max_frames=8, resize=224, transforms=None, clip_mode=True):
         import csv
         self.cache_root = cache_root
         self.max_frames = max_frames
         self.resize = resize
-        self.clip_mode = clip_mode  # if True return stacked frames tensor [C, T, H, W] else single-frame samples
+        self.clip_mode = clip_mode  # if True return stacked frames tensor [C, T, H, W]
         self.transforms = transforms or default_transforms(resize)
         self.samples = []
+
         # load metadata CSV (robust to extra columns)
         with open(metadata_csv, "r") as fh:
             rdr = csv.DictReader(fh)
             for row in rdr:
-                # Expect columns like 'file' or 'filepath' and 'label'
                 file_col = None
                 for candidate in ["file", "filepath", "url", "path"]:
                     if candidate in row and row[candidate]:
@@ -49,6 +50,7 @@ class GenBusterDataset(Dataset):
                 vid_id = os.path.splitext(os.path.basename(row[file_col]))[0]
                 cache_path = os.path.join(cache_root, f"{vid_id}.pt")
                 self.samples.append({"cache": cache_path, "label": label, "vid": vid_id})
+
         if len(self.samples) == 0:
             raise RuntimeError("No metadata samples found. Check CSV and file columns.")
 
@@ -61,33 +63,42 @@ class GenBusterDataset(Dataset):
         if not os.path.exists(cache_path):
             raise FileNotFoundError(f"Cache missing: {cache_path}. Run caching step.")
         data = torch.load(cache_path)  # expected shape [T, H, W, C] uint8 or float32
-        # If stored as numpy, ensure it's torch
+
+        # ensure torch tensor
         if isinstance(data, np.ndarray):
             data = torch.from_numpy(data)
-        # ensure T dimension
+
+        # ensure at least max_frames frames
         T = data.shape[0]
         if T < self.max_frames:
-            # pad by repeating last frame
             pad = self.max_frames - T
             last = data[-1:].repeat(pad, 1, 1, 1)
             data = torch.cat([data, last], dim=0)
         else:
             data = data[:self.max_frames]
-        # data: [T, H, W, C] -> convert frames via transforms per-frame
+
+        # apply transforms per frame
         frames = []
         for t in range(self.max_frames):
             img = data[t].numpy().astype("uint8")
-            img_t = self.transforms(img)  # [C,H,W]
+            img_t = self.transforms(img)
             frames.append(img_t)
         frames = torch.stack(frames, dim=1)  # [C, T, H, W]
         label = torch.tensor(s["label"], dtype=torch.long)
+
         if self.clip_mode:
             return frames, label
-        # else return single-frame sample: pick middle frame
         mid = frames[:, self.max_frames // 2, :, :].clone()
         return mid, label
 
-def create_dataloader(metadata_csv, batch_size=4, num_workers=4, clip_mode=True, shuffle=True):
-    ds = GenBusterDataset(metadata_csv, clip_mode=clip_mode)
-    loader = DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, prefetch_factor=2)
+def create_dataloader(metadata_csv, batch_size=4, num_workers=4, clip_mode=True,
+                      shuffle=True, cache_root="data/processed/genbuster_cached"):
+    ds = GenBusterDataset(metadata_csv, cache_root=cache_root, clip_mode=clip_mode)
+
+    if num_workers == 0:
+        loader = DataLoader(ds, batch_size=batch_size, shuffle=shuffle,
+                            num_workers=num_workers, pin_memory=True)
+    else:
+        loader = DataLoader(ds, batch_size=batch_size, shuffle=shuffle,
+                            num_workers=num_workers, pin_memory=True, prefetch_factor=2)
     return loader
