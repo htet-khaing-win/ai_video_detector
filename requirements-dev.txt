@@ -5,7 +5,4 @@
 flake8>=6.0.0
 black>=23.0.0
 pytest>=7.0.0
-datasets
-huggingface_hub
 py7zr
-tqdm
