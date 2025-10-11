@@ -33,9 +33,3 @@ matplotlib==3.9.2
 
 # System Utilities
 psutil==5.9.8
-
-# NVIDIA CUDA Dependencies (included with PyTorch, but listed for clarity)
-nvidia-cudnn-cu12==9.1.0.70
-nvidia-cublas-cu12==12.4.5.8
-nvidia-cuda-runtime-cu12==12.4.127
-nvidia-nvtx-cu12==12.4.127
