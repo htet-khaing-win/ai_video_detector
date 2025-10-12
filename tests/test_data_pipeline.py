@@ -2,6 +2,8 @@ import torch
 import pandas as pd
 import sys
 from pathlib import Path
+import os
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -10,11 +12,15 @@ sys.path.insert(0, str(project_root))
 from src.data.preprocess_pytorch import create_dataloader
 
 def test_dataloader_debug():
+    
     """Test that dataloader can load and return batches correctly"""
     
     print("Testing dataloader...")
     
-    # FIXED: Correct parameter names
+    if not os.path.exists("data/processed/genbuster_cached") or \
+       not os.path.exists("data/splits/train_metadata.csv"):
+        pytest.skip("Skipping dataset-dependent test in CI")
+
     loader = create_dataloader(
         metadata_csv="data/splits/train_metadata.csv",      
         batch_size=4,                                        
