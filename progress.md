@@ -11,5 +11,8 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 - Automated full pipeline: download → extract → cache
 - Verified cache integrity and DataLoader consistency
 
+### Baseline Model Prototyping
+- Added BaselineCNN (ResNet18 + temporal pooling)
+- Integrated VRAM monitor and existing dataloaders
 
 
