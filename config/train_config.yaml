@@ -1,0 +1,50 @@
+model:
+  name: "baseline_cnn"
+  architecture: "resnet18"
+  num_classes: 2
+  pretrained: true
+  temporal_pool: "avg"
+
+data:
+  train_csv: "data/splits/train_metadata.csv"
+  val_csv: "data/splits/test_metadata.csv"
+  cache_root: "data/processed/genbuster_cached"
+  batch_size: 16
+  num_workers: 4
+  max_frames: 8
+
+training:
+  epochs: 40
+  learning_rate: 0.0001
+  optimizer: "adam"
+  weight_decay: 0.0001
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 5
+    monitor: "val_acc"
+    mode: "max"
+  
+  # Learning rate scheduler
+  lr_scheduler:
+    enabled: true
+    type: "reduce_on_plateau"
+    factor: 0.5
+    patience: 3
+    min_lr: 0.000001
+    monitor: "val_loss"
+    mode: "min"
+
+checkpoint:
+  save_dir: "models"
+  save_best_only: true
+  monitor: "val_acc"
+  mode: "max"
+
+device: "cuda"
+
+logging:
+  log_dir: "logs"
+  plot_dir: "plots"
+  save_plot: true
