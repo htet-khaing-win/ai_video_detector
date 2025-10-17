@@ -1,29 +1,33 @@
-# src/models/baseline_cnn.py
 import torch
 import torch.nn as nn
 import torchvision.models as models
 
 class BaselineCNN(nn.Module):
-    def __init__(self, num_classes=2, pretrained=True, temporal_pool="avg"):
+    def __init__(self, num_classes=2, pretrained=True, temporal_pool="avg", dropout=0.5):
         super().__init__()
         backbone = models.resnet18(weights="IMAGENET1K_V1" if pretrained else None)
         self.features = nn.Sequential(*list(backbone.children())[:-2])  
         self.temporal_pool = temporal_pool
+        
+        # Enhanced head with dropout and additional layer
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(512, num_classes)
+            nn.Dropout(p=dropout),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(256, num_classes)
         )
 
     def forward(self, x):
-        
         B, C, T, H, W = x.shape
-        x = x.permute(0, 2, 1, 3, 4)  # Now (B, T, C, H, W)
-        
-        # Reshape to process all frames at once
+        x = x.permute(0, 2, 1, 3, 4)
         x = x.reshape(B * T, C, H, W)
+        
         feats = self.features(x)
         feats = self.head[0](feats)  # avgpool
+        feats = self.head[1](feats)  # flatten
         feats = feats.view(B, T, -1)
 
         if self.temporal_pool == "avg":
@@ -33,5 +37,6 @@ class BaselineCNN(nn.Module):
         else:
             pooled = feats[:, 0]
 
-        logits = self.head[2](pooled)
+        # Pass through dropout + classifier layers
+        logits = self.head[2:](pooled)
         return logits
