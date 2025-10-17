@@ -30,6 +30,7 @@ pyyaml==6.0.2
 # Logging and Visualization
 wandb==0.17.7
 matplotlib==3.9.2
+seaborn
 
 # System Utilities
 psutil==5.9.8
