@@ -6,23 +6,23 @@ model:
   temporal_pool: "avg"
 
 data:
-  train_csv: "data/splits/train_metadata.csv"
-  val_csv: "data/splits/test_metadata.csv"
+  train_csv: "data/splits/train_crossgen.csv"
+  val_csv: "data/splits/val_crossgen.csv"
   cache_root: "data/processed/genbuster_cached"
-  batch_size: 16
+  batch_size: 32
   num_workers: 4
   max_frames: 8
 
 training:
-  epochs: 40
-  learning_rate: 0.0001
-  optimizer: "adam"
-  weight_decay: 0.0001
+  epochs: 60
+  learning_rate: 0.0005
+  optimizer: "adamW"
+  weight_decay: 0.02
   
   # Early stopping
   early_stopping:
     enabled: true
-    patience: 5
+    patience: 10
     monitor: "val_acc"
     mode: "max"
   
@@ -31,7 +31,7 @@ training:
     enabled: true
     type: "reduce_on_plateau"
     factor: 0.5
-    patience: 3
+    patience: 5
     min_lr: 0.000001
     monitor: "val_loss"
     mode: "min"
