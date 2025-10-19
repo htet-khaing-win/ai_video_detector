@@ -1,3 +1,4 @@
+# train_baseline.py
 import sys
 import torch
 import torch.nn as nn
@@ -10,7 +11,6 @@ import json
 import random
 import numpy as np
 
-
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -20,25 +20,34 @@ from src.data.preprocess_pytorch import create_dataloader
 
 
 def set_seed(seed=42):
-    """Set random seeds for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    print(f" Random seed set to {seed}")
+    print(f"Random seed set to {seed}")
 
-def mixup_data(x, y, alpha=0.2):
-    lam = np.random.beta(alpha, alpha) if alpha > 0 else 1.0
-    batch_size = x.size(0)
-    index = torch.randperm(batch_size).to(x.device)
-    mixed_x = lam * x + (1 - lam) * x[index]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, label_smoothing=0.1):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.label_smoothing = label_smoothing
+        
+    def forward(self, inputs, targets):
+        ce_loss = nn.functional.cross_entropy(
+            inputs, targets, 
+            reduction='none',
+            label_smoothing=self.label_smoothing
+        )
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        return focal_loss.mean()
+
 
 class EarlyStopping:
-    """Early stopping to stop training when validation metric stops improving."""
     def __init__(self, patience=5, mode='max', min_delta=0.0):
         self.patience = patience
         self.mode = mode
@@ -62,7 +71,6 @@ class EarlyStopping:
 
 
 class TrainingLogger:
-    """Logger to track training metrics and create plots."""
     def __init__(self, config):
         self.history = {
             'train_loss': [],
@@ -81,7 +89,6 @@ class TrainingLogger:
         self.history['lr'].append(lr)
         
     def save_history(self, save_path):
-        """Save the training history to a JSON file."""
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, 'w') as f:
@@ -89,7 +96,6 @@ class TrainingLogger:
         print(f"Training history saved to: {save_path}")
         
     def plot_and_save(self, save_path, save_history_path=None):
-        """Plot training curves and save. Optionally save history JSON."""
         plt.style.use('seaborn-v0_8-whitegrid')
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
         plt.rcParams.update({
@@ -103,7 +109,6 @@ class TrainingLogger:
 
         epochs = range(1, len(self.history['train_loss']) + 1)
 
-        # ---- Loss Curve ----
         axes[0].plot(epochs, self.history['train_loss'], label='Train Loss', color="#1f77b4", linewidth=2)
         axes[0].plot(epochs, self.history['val_loss'], label='Val Loss', color="#ff7f0e", linewidth=2, linestyle="--")
         axes[0].set_xlabel("Epoch")
@@ -112,7 +117,6 @@ class TrainingLogger:
         axes[0].legend(frameon=False)
         axes[0].grid(alpha=0.3)
 
-        # ---- Accuracy Curve ----
         axes[1].plot(epochs, self.history['train_acc'], label='Train Accuracy', color="#2ca02c", linewidth=2)
         axes[1].plot(epochs, self.history['val_acc'], label='Val Accuracy', color="#d62728", linewidth=2, linestyle="--")
         axes[1].set_xlabel("Epoch")
@@ -121,7 +125,6 @@ class TrainingLogger:
         axes[1].legend(frameon=False)
         axes[1].grid(alpha=0.3)
 
-        # ---- Summary box ----
         best_val_acc = max(self.history['val_acc'])
         best_epoch = self.history['val_acc'].index(best_val_acc) + 1
         final_train_acc = self.history['train_acc'][-1]
@@ -141,39 +144,49 @@ class TrainingLogger:
         plt.close()
         print(f"Plot saved to: {save_path}")
 
-        # Save history JSON if path is provided
         if save_history_path is not None:
             self.save_history(save_history_path)
 
 
+def mixup_data(x, y, alpha=0.4):
+    lam = np.random.beta(alpha, alpha)
+    index = torch.randperm(x.size(0)).to(x.device)
+    mixed_x = lam * x + (1 - lam) * x[index]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
 def train_epoch(model, loader, optimizer, criterion, device):
     model.train()
     total_loss, correct, total = 0, 0, 0
-    
+
     pbar = tqdm(loader, desc="Training", leave=False)
     for frames, labels in pbar:
         frames, labels = frames.to(device), labels.to(device)
-
-        inputs, targets_a, targets_b, lam = mixup_data(frames, labels, alpha=0.2)   
-        logits = model(inputs)                                                     
-        loss = lam * criterion(logits, targets_a) + (1 - lam) * criterion(logits, targets_b)
-        
         optimizer.zero_grad()
-        logits = model(frames)
-        loss = criterion(logits, labels)
+
+        # --- MIXUP AUGMENTATION (50% of batches) ---
+        if torch.rand(1).item() < 0.5:
+            frames, y_a, y_b, lam = mixup_data(frames, labels, alpha=0.4)
+            logits = model(frames)
+            loss = lam * criterion(logits, y_a) + (1 - lam) * criterion(logits, y_b)
+        else:
+            logits = model(frames)
+            loss = criterion(logits, labels)
+        # -------------------------------------------
+
         loss.backward()
         optimizer.step()
-        
+
         total_loss += loss.item() * frames.size(0)
         preds = logits.argmax(1)
         correct += (preds == labels).sum().item()
         total += labels.size(0)
-        
+
         pbar.set_postfix({
             'loss': f'{loss.item():.4f}',
             'acc': f'{correct/total:.4f}'
         })
-    
+
     return total_loss / total, correct / total
 
 
@@ -196,48 +209,41 @@ def evaluate(model, loader, criterion, device):
 
 
 def load_config(config_path):
-    """Load configuration from YAML file."""
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     return config
 
 
 def load_checkpoint(model, optimizer, checkpoint_path, device):
-    """Load model and optimizer from checkpoint."""
-    print(f"\n Loading checkpoint from: {checkpoint_path}")
+    print(f"\nLoading checkpoint from: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     
-    print(f"   Loaded from epoch {checkpoint['epoch']}")
-    print(f"   Previous val_acc: {checkpoint['val_acc']:.4f}")
-    print(f"   Previous val_loss: {checkpoint['val_loss']:.4f}")
+    print(f"  Loaded from epoch {checkpoint['epoch']}")
+    print(f"  Previous val_acc: {checkpoint['val_acc']:.4f}")
+    print(f"  Previous val_loss: {checkpoint['val_loss']:.4f}")
     
     return checkpoint['epoch'], checkpoint['val_acc']
 
 
 def main(config_path='config/train_config.yaml', resume_from=None):
-    # SET SEED FIRST FOR REPRODUCIBILITY
     set_seed(42)
     
-    # Load configuration
     config = load_config(config_path)
     print("\n" + "="*60)
     print("Configuration loaded:")
     print("="*60)
     print(yaml.dump(config, default_flow_style=False))
     
-    # Setup
     device = config['device'] if torch.cuda.is_available() else 'cpu'
     print(f"\nUsing device: {device}")
     
-    # Create directories
     Path(config['checkpoint']['save_dir']).mkdir(exist_ok=True, parents=True)
     Path(config['logging']['plot_dir']).mkdir(exist_ok=True, parents=True)
     Path(config['logging']['log_dir']).mkdir(exist_ok=True, parents=True)
     
-    # Dataloaders
     train_loader = create_dataloader(
         metadata_csv=config['data']['train_csv'],
         cache_root=config['data']['cache_root'],
@@ -260,57 +266,56 @@ def main(config_path='config/train_config.yaml', resume_from=None):
     
     print(f"\nDataset sizes: Train={len(train_loader.dataset)}, Val={len(val_loader.dataset)}")
     
-    # Model
     model = BaselineCNN(
         num_classes=config['model']['num_classes'],
         pretrained=config['model']['pretrained'],
-        temporal_pool=config['model']['temporal_pool'],
+        temporal_pool="attention",
         dropout=0.5
     ).to(device)
 
-    # Freeze ALL parameters first
     for param in model.parameters():
         param.requires_grad = False
     
-    # Unfreeze layer4 (features.7) AND head (classifier)
-    print("\n Unfreezing layer4 and classifier head:")
+    print("\nUnfreezing layer4 and classifier head:")
     for name, param in model.named_parameters():
-        if name.startswith('features.7.') or name.startswith('head.'):
+        if name.startswith('features.6.') or name.startswith('features.7.') or name.startswith('head.') or name.startswith('temporal_attention.'):
             param.requires_grad = True
-            print(f"   {name}")
+            print(f"  {name}")
     
-    # Count trainable parameters
+    layer3_params = sum(p.numel() for n, p in model.named_parameters() if 'features.6.' in n and p.requires_grad)
     layer4_params = sum(p.numel() for n, p in model.named_parameters() if 'features.7.' in n and p.requires_grad)
     head_params = sum(p.numel() for n, p in model.named_parameters() if 'head.' in n and p.requires_grad)
+    attn_params = sum(p.numel() for n, p in model.named_parameters() if 'temporal_attention' in n and p.requires_grad)
     total_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
     
-    print(f"\n Trainable parameter breakdown:")
+    print(f"\nTrainable parameter breakdown:")
+    print(f"  Layer3: {layer3_params:,} params")
     print(f"  Layer4: {layer4_params:,} params")
     print(f"  Head: {head_params:,} params")
+    print(f"  Temporal Attention: {attn_params:,} params")
     print(f"  Total: {total_trainable:,} / {total_params:,} ({100*total_trainable/total_params:.1f}%)")
     
-    # Optimizer with discriminative learning rates
     base_lr = config['training']['learning_rate']
     optimizer = optim.AdamW([
         {'params': [p for n, p in model.named_parameters() if 'features.7.' in n and p.requires_grad], 
-         'lr': base_lr * 0.1},  # Layer4: 10x smaller LR
+         'lr': base_lr * 0.1},
         {'params': [p for n, p in model.named_parameters() if 'head.' in n and p.requires_grad], 
-         'lr': base_lr}  # Classifier: full LR
+         'lr': base_lr},
+        {'params': [p for n, p in model.named_parameters() if 'temporal_attention' in n and p.requires_grad], 
+         'lr': base_lr}
     ], weight_decay=config['training']['weight_decay'])
     
-    print(f"\n Optimizer learning rates:")
-    print(f"  Layer4: LR={base_lr :.6f}")
-    print(f"  Head: LR={base_lr:.6f}")
+    print(f"\nOptimizer learning rates:")
+    print(f"  Layer4: LR={base_lr * 0.1:.6f}")
+    print(f"  Head/Attention: LR={base_lr:.6f}")
     
-    # Load checkpoint if resuming
     start_epoch = 0
     best_val_acc = 0.0
     if resume_from is not None:
         start_epoch, best_val_acc = load_checkpoint(model, optimizer, resume_from, device)
-        print(f"\n Resuming training from epoch {start_epoch}")
+        print(f"\nResuming training from epoch {start_epoch}")
     
-    # Scheduler
     scheduler = None
     if config['training']['lr_scheduler']['enabled']:
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -322,10 +327,8 @@ def main(config_path='config/train_config.yaml', resume_from=None):
             verbose=True
         )
     
-    # Loss
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.15)
+    criterion = FocalLoss(alpha=0.25, gamma=2.0, label_smoothing=0.1)
     
-    # Early stopping
     early_stopping = None
     if config['training']['early_stopping']['enabled']:
         early_stopping = EarlyStopping(
@@ -333,7 +336,6 @@ def main(config_path='config/train_config.yaml', resume_from=None):
             mode=config['training']['early_stopping']['mode']
         )
     
-    # Logger
     logger = TrainingLogger(config)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -368,7 +370,7 @@ def main(config_path='config/train_config.yaml', resume_from=None):
                 'val_loss': val_loss,
                 'config': config
             }, model_path)
-            print(f"  → Saved best model (val_acc={val_acc:.4f})")
+            print(f"  -> Saved best model (val_acc={val_acc:.4f})")
         
         if early_stopping is not None and early_stopping(val_acc):
             print(f"\nEarly stopping triggered at epoch {epoch}")
