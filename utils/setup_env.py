@@ -6,6 +6,17 @@ import torch
 import logging
 import yaml
 
+def get_random_seed(config_path="config.yaml"):
+    """Return reproducible random seed from config file."""
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        seed = config.get("seed", 42)
+        return seed
+    except FileNotFoundError:
+        logging.warning("config.yaml not found. Using default seed: 42")
+        return 42
+    
 
 def setup_environment(config_path="config.yaml"):
     """Setup environment for reproducible PyTorch training."""
