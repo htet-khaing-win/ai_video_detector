@@ -1,194 +1,174 @@
-"""
-Generate metadata CSVs from GenBuster hierarchical dataset structure.
-
-Scans train/, test/, and benchmark/ splits and creates CSV files with:
-- split: train/test/benchmark
-- label: 0 (real) or 1 (fake)
-- generator: real, cogvideox, easyanimate, etc.
-- filepath: relative path to video file
-- video_id: unique identifier (hash from filename)
-
-Usage:
-    python scripts/create_metadata_from_hierarchy.py
-"""
 import os
-import sys
+import csv
 from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-import pandas as pd
-import argparse
 from tqdm import tqdm
 
+def create_metadata_from_directory(
+    dataset_root="D:/GenBuster200k/raw/GenBuster-200K/GenBuster-200K",
+    output_dir="C:/Personal project/ai_video_detector/data/splits"
+):
+   
+    print("\n" + "="*60)
+    print("Creating Metadata from GenBuster Directory Structure")
+    print("="*60)
 
-def scan_split(split_dir, split_name):
-    """
-    Scan a single split directory (train/test/benchmark).
-    
-    Returns:
-        List of dicts with metadata for each video
-    """
-    split_path = Path(split_dir)
-    records = []
-    
-    print(f"\n[{split_name.upper()}] Scanning videos...")
-    
-    # Process real videos
-    real_dir = split_path / "real"
-    if real_dir.exists():
-        real_videos = list(real_dir.glob("*.mp4"))
-        print(f"  Found {len(real_videos)} real videos")
-        
-        for video_path in tqdm(real_videos, desc=f"  Processing real"):
-            video_id = video_path.stem  # Filename without extension
-            relative_path = video_path.relative_to(split_path.parent)
-            
-            records.append({
-                "split": split_name,
-                "label": 0,
-                "generator": "real",
-                "category": "real",
-                "filepath": str(relative_path).replace("\\", "/"),
-                "video_id": video_id
-            })
-    
-    # Process fake videos (nested by generator)
-    fake_dir = split_path / "fake"
-    if fake_dir.exists():
-        # Get all generator subdirectories
-        generator_dirs = [d for d in fake_dir.iterdir() if d.is_dir()]
-        print(f"  Found {len(generator_dirs)} generator types: {[d.name for d in generator_dirs]}")
-        
-        for gen_dir in generator_dirs:
-            generator_name = gen_dir.name
-            fake_videos = list(gen_dir.glob("*.mp4"))
-            
-            print(f"    {generator_name}: {len(fake_videos)} videos")
-            
-            for video_path in tqdm(fake_videos, desc=f"    Processing {generator_name}", leave=False):
-                video_id = video_path.stem
-                relative_path = video_path.relative_to(split_path.parent)
-                
-                records.append({
-                    "split": split_name,
-                    "label": 1,
-                    "generator": generator_name,
-                    "category": "synthetic",
-                    "filepath": str(relative_path).replace("\\", "/"),
-                    "video_id": video_id
-                })
-    
-    return records
-
-
-def create_metadata(dataset_root, output_dir):
-    """
-    Scan entire dataset and create metadata CSVs for each split.
-    """
     dataset_root = Path(dataset_root)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("=" * 60)
-    print("GenBuster Metadata Generator")
-    print("=" * 60)
-    print(f"Dataset root: {dataset_root}")
-    print(f"Output directory: {output_dir}")
-    
-    splits = ["train", "test", "benchmark"]
-    all_records = []
-    split_stats = {}
-    
-    for split in splits:
+
+    # Verify dataset root exists
+    if not dataset_root.exists():
+        print(f" Dataset root not found: {dataset_root}")
+        return None
+
+    all_metadata = []
+    seen_video_ids = set()  # Track duplicates
+
+    # Process splits
+    for split in ['train', 'test', 'benchmark']:
         split_dir = dataset_root / split
         
         if not split_dir.exists():
-            print(f"\n[WARNING] Split not found: {split_dir}")
+            print(f"  {split} folder not found: {split_dir}")
             continue
-        
-        # Scan split
-        records = scan_split(split_dir, split)
-        all_records.extend(records)
-        
+
+        print(f"\nProcessing {split.upper()} split...")
+
+        # ============ Real videos ============
+        real_dir = split_dir / 'real'
+        if real_dir.exists():
+            real_videos = [
+                f for f in real_dir.iterdir() 
+                if f.is_file() and f.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+            ]
+            print(f"  real: {len(real_videos)} videos")
+            
+            for video_path in tqdm(real_videos, desc="    Processing real", leave=False):
+                # Generate unique video_id
+                video_id = video_path.stem
+                if video_id in seen_video_ids:
+                    video_id = f"real_{video_path.stem}_{hash(str(video_path)) % 10000}"
+                seen_video_ids.add(video_id)
+                
+                all_metadata.append({
+                    'video_id': video_id,
+                    'filepath': str(video_path.relative_to(dataset_root)).replace('\\', '/'),
+                    'absolute_path': str(video_path.resolve()).replace('\\', '/'),
+                    'label': 0,
+                    'split': split,
+                    'dataset': 'genbuster',
+                    'generator': 'real'
+                })
+        else:
+            print(f"  real folder missing: {real_dir}")
+
+        # ============ Fake videos (recursive) ============
+        fake_dir = split_dir / 'fake'
+        if fake_dir.exists():
+            fake_videos = []
+            
+            # Walk through fake directory (may have generator subfolders)
+            for root, _, files in os.walk(fake_dir):
+                root_path = Path(root)
+                
+                for filename in files:
+                    if Path(filename).suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv', '.webm']:
+                        video_path = root_path / filename
+                        fake_videos.append(video_path)
+            
+            print(f"  fake: {len(fake_videos)} videos")
+            
+            for video_path in tqdm(fake_videos, desc="    Processing fake", leave=False):
+                # Detect generator type from parent folder
+                # e.g., fake/sora/video.mp4 -> generator: "sora"
+                relative_to_fake = video_path.relative_to(fake_dir)
+                
+                if len(relative_to_fake.parts) > 1:
+                    # Video is in subfolder (e.g., sora/video.mp4)
+                    generator = relative_to_fake.parts[0]
+                else:
+                    # Video directly in fake/ folder
+                    generator = 'ai_generated'
+                
+                # Generate unique video_id
+                video_id = video_path.stem
+                if video_id in seen_video_ids:
+                    video_id = f"{generator}_{video_path.stem}_{hash(str(video_path)) % 10000}"
+                seen_video_ids.add(video_id)
+                
+                all_metadata.append({
+                    'video_id': video_id,
+                    'filepath': str(video_path.relative_to(dataset_root)).replace('\\', '/'),
+                    'absolute_path': str(video_path.resolve()).replace('\\', '/'),
+                    'label': 1,
+                    'split': split,
+                    'dataset': 'genbuster',
+                    'generator': generator
+                })
+        else:
+            print(f"  fake folder missing: {fake_dir}")
+
         # Save split-specific CSV
-        df_split = pd.DataFrame(records)
-        output_csv = output_dir / f"{split}_metadata.csv"
-        df_split.to_csv(output_csv, index=False)
+        split_metadata = [m for m in all_metadata if m['split'] == split]
         
-        # Collect stats
-        real_count = len(df_split[df_split["label"] == 0])
-        fake_count = len(df_split[df_split["label"] == 1])
-        split_stats[split] = {
-            "total": len(df_split),
-            "real": real_count,
-            "fake": fake_count,
-            "csv": output_csv
-        }
+        if split_metadata:
+            split_csv = output_dir / f"{split}_metadata.csv"
+            with open(split_csv, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=split_metadata[0].keys())
+                writer.writeheader()
+                writer.writerows(split_metadata)
+            
+            real_count = sum(1 for m in split_metadata if m['label'] == 0)
+            fake_count = sum(1 for m in split_metadata if m['label'] == 1)
+            
+            print(f"  {split}_metadata.csv saved")
+            print(f"    Total: {len(split_metadata)} ({real_count} real, {fake_count} fake)")
+
+    # Save unified CSV
+    if all_metadata:
+        unified_csv = output_dir / "unified_metadata.csv"
+        with open(unified_csv, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=all_metadata[0].keys())
+            writer.writeheader()
+            writer.writerows(all_metadata)
+
+        print(f"\n{'='*60}")
+        print(" Metadata Creation Complete!")
+        print(f"{'='*60}")
+        print(f"Total videos: {len(all_metadata)}")
+        print(f"Output directory: {output_dir}")
         
-        print(f"\n   Saved: {output_csv}")
-        print(f"     Total: {len(df_split)} videos")
-        print(f"     Real: {real_count}, Fake: {fake_count}")
+        # Summary by split
+        print(f"\nSummary by split:")
+        for split in ['train', 'test', 'benchmark']:
+            split_data = [m for m in all_metadata if m['split'] == split]
+            if split_data:
+                real = sum(1 for m in split_data if m['label'] == 0)
+                fake = sum(1 for m in split_data if m['label'] == 1)
+                print(f"  {split:10s}: {len(split_data):6d} total ({real:6d} real, {fake:6d} fake)")
         
-        # Show generator distribution for fake videos
-        if fake_count > 0:
-            gen_dist = df_split[df_split["label"] == 1]["generator"].value_counts()
-            print(f"     Generator distribution:")
-            for gen, count in gen_dist.items():
-                print(f"       {gen}: {count}")
-    
-    # Save combined metadata
-    df_all = pd.DataFrame(all_records)
-    combined_csv = output_dir / "combined_metadata.csv"
-    df_all.to_csv(combined_csv, index=False)
-    
-    print("\n" + "=" * 60)
-    print("Metadata Generation Complete!")
-    print("=" * 60)
-    
-    # Summary table
-    print("\nSummary:")
-    print(f"{'Split':<12} {'Total':>8} {'Real':>8} {'Fake':>8} {'Balance':>10}")
-    print("-" * 50)
-    
-    for split, stats in split_stats.items():
-        balance = f"{stats['real']/stats['total']*100:.1f}% real"
-        print(f"{split:<12} {stats['total']:>8} {stats['real']:>8} {stats['fake']:>8} {balance:>10}")
-    
-    total_videos = sum(s["total"] for s in split_stats.values())
-    total_real = sum(s["real"] for s in split_stats.values())
-    total_fake = sum(s["fake"] for s in split_stats.values())
-    
-    print("-" * 50)
-    print(f"{'TOTAL':<12} {total_videos:>8} {total_real:>8} {total_fake:>8} {total_real/total_videos*100:.1f}% real")
-    
-    print(f"\nOutput files:")
-    for split, stats in split_stats.items():
-        print(f"  - {stats['csv']}")
-    print(f"  - {combined_csv}")
-    
-    print("\nNext steps:")
-    print("  1. Run: python scripts/run_full_pipeline.py --skip_download")
-    print("  2. Or extract frames: python scripts/extract_frames.py")
+        # Summary by generator
+        print(f"\nFake videos by generator:")
+        from collections import Counter
+        generators = Counter(m['generator'] for m in all_metadata if m['label'] == 1)
+        for gen, count in generators.most_common():
+            print(f"  {gen:20s}: {count:6d} videos")
+        
+        print(f"\n{'='*60}")
+
+    else:
+        print("\n No videos found! Check your directory structure.")
+        print(f"Expected structure:")
+        print(f"  {dataset_root}/")
+        print(f"    train/real/*.mp4")
+        print(f"    train/fake/**/*.mp4")
+        print(f"    test/real/*.mp4")
+        print(f"    test/fake/**/*.mp4")
+        print(f"    benchmark/real/*.mp4")
+        print(f"    benchmark/fake/**/*.mp4")
+
+    return output_dir
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate metadata CSVs from GenBuster hierarchical dataset"
-    )
-    parser.add_argument(
-        "--dataset_root",
-        default="data/raw/genbuster-200k-mini/GenBuster-200K-mini",
-        help="Root directory of GenBuster dataset (contains train/test/benchmark/)"
-    )
-    parser.add_argument(
-        "--output_dir",
-        default="data/splits",
-        help="Output directory for metadata CSVs"
-    )
-    
-    args = parser.parse_args()
-    
-    create_metadata(args.dataset_root, args.output_dir)
+    create_metadata_from_directory()
