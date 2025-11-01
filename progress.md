@@ -15,4 +15,12 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 - Added BaselineCNN (ResNet18 + temporal pooling)
 - Integrated VRAM monitor and existing dataloaders
 
+### Frame Extraction Upgrade
+
+* Replaced CPU-only pipeline with **hybrid GPU/CPU extraction** using FFmpeg NVDEC + OpenCV fallback.
+* Solved color diffusion issue to ensure **full color fidelity** in extracted frames.
+* Enforced **16-frame consistency** across variable-length videos.
+* Optimized temp handling (SSD-based cache) and automatic cleanup post-extraction.
+
+
 
