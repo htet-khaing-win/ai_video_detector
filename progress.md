@@ -15,7 +15,7 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 - Added BaselineCNN (ResNet18 + temporal pooling)
 - Integrated VRAM monitor and existing dataloaders
 
-###Dataset Integration & Preprocessing (Upgrade)
+### Dataset Integration & Preprocessing (Upgrade)
 - Switched from GenBuster mini to full GenBuster-200K + DFD datasets for improved real-world recall.
 
 ### Frame Extraction Upgrade
@@ -24,6 +24,7 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 - Solved color diffusion issue to ensure **full color fidelity** in extracted frames.
 - Enforced **16-frame consistency** across variable-length videos.
 - Optimized temp handling (SSD-based cache) and automatic cleanup post-extraction.
+
 
 
 
