@@ -1,5 +1,5 @@
 ### Repository Initialization
-Set up base repository structure, environment configuration, and reproducibility utilities. Verified TensorFlow GPU setup and mixed-precision policy with smoke tests.
+Set up base repository structure, environment configuration, and reproducibility utilities. Verified Pytorch GPU setup and mixed-precision policy with smoke tests.
 
 ### CI and Dataset Scaffolding 
 Added GitHub Actions CI pipeline for linting and unit tests. Configured flake8 style enforcement. Implemented initial dataset scaffold with synthetic sample generation and basic pytest verification. Repository now ready for automated testing workflow.
@@ -21,6 +21,7 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 * Solved color diffusion issue to ensure **full color fidelity** in extracted frames.
 * Enforced **16-frame consistency** across variable-length videos.
 * Optimized temp handling (SSD-based cache) and automatic cleanup post-extraction.
+
 
 
 
