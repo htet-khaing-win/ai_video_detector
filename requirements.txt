@@ -34,3 +34,8 @@ seaborn
 
 # System Utilities
 psutil==5.9.8
+
+# Deployment
+fastapi
+uvicorn
+python-multipart
