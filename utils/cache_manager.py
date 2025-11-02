@@ -1,11 +1,4 @@
 # src/utils/cache_manager.py
-"""
-Unified cache management system for .pt tensor files.
-Provides atomic writes, integrity verification, and consistent metadata.
-
-Version: 2.0
-Author: AI Video Detector Team
-"""
 
 import torch
 import hashlib
@@ -88,18 +81,7 @@ class CacheManager:
              output_path: Path,
              metadata: Optional[Dict[str, Any]] = None,
              verify: bool = True) -> bool:
-        """
-        Save tensor to .pt file with atomic write and verification.
         
-        Args:
-            tensor: Tensor to save (any format)
-            output_path: Destination file path
-            metadata: Optional metadata dict
-            verify: Whether to verify write integrity
-            
-        Returns:
-            True if successful, False otherwise
-        """
         try:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,17 +137,7 @@ class CacheManager:
              file_path: Path,
              verify: bool = True,
              device: str = 'cpu') -> Optional[Tuple[torch.Tensor, Dict[str, Any]]]:
-        """
-        Load tensor from .pt file with integrity verification.
         
-        Args:
-            file_path: Path to .pt file
-            verify: Whether to verify checksum
-            device: Device to load tensor to
-            
-        Returns:
-            (tensor, metadata) tuple, or None if load fails
-        """
         try:
             file_path = Path(file_path)
             
@@ -203,15 +175,7 @@ class CacheManager:
             return None
     
     def validate_cache_file(self, file_path: Path) -> Dict[str, Any]:
-        """
-        Validate a cache file and return diagnostic info.
         
-        Args:
-            file_path: Path to .pt file
-            
-        Returns:
-            Dict with validation results
-        """
         result = {
             'path': str(file_path),
             'exists': file_path.exists(),
@@ -253,12 +217,7 @@ class CacheManager:
         return result
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about cached data.
         
-        Returns:
-            Dict with cache statistics
-        """
         pt_files = list(self.cache_root.rglob('*.pt'))
         
         stats = {
@@ -355,18 +314,7 @@ def save_cached_tensor(tensor: torch.Tensor,
                        output_path: Path,
                        format_type: str = "THWC",
                        verify: bool = True) -> bool:
-    """
-    Convenience function to save a tensor with default settings.
     
-    Args:
-        tensor: Tensor to save
-        output_path: Destination path
-        format_type: Tensor format
-        verify: Enable verification
-        
-    Returns:
-        Success status
-    """
     manager = CacheManager(output_path.parent, format_type=format_type)
     return manager.save(tensor, output_path, verify=verify)
 
@@ -374,17 +322,7 @@ def save_cached_tensor(tensor: torch.Tensor,
 def load_cached_tensor(file_path: Path,
                        verify: bool = True,
                        device: str = 'cpu') -> Optional[torch.Tensor]:
-    """
-    Convenience function to load a tensor.
     
-    Args:
-        file_path: Path to .pt file
-        verify: Enable verification
-        device: Target device
-        
-    Returns:
-        Loaded tensor or None
-    """
     manager = CacheManager(file_path.parent)
     result = manager.load(file_path, verify=verify, device=device)
     

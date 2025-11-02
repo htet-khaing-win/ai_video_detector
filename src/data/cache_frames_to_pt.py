@@ -1,16 +1,4 @@
 # cache_frames_to_pt_gpu_optimized.py
-"""
-GPU-Optimized Tensor Caching Pipeline with Robust Error Handling
-
-Key improvements over previous version:
-1. GPU-accelerated JPEG decoding (3-5x faster)
-2. Batched processing to maximize GPU utilization
-3. Strict validation before saving (prevents corrupt files)
-4. Controlled disk I/O to prevent race conditions
-5. Automatic cleanup of failed writes
-
-Expected performance: 200K videos in 2-3 hours (vs 4-6 hours CPU)
-"""
 
 import sys
 from pathlib import Path
@@ -43,10 +31,8 @@ logger = logging.getLogger(__name__)
 import os
 os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
 
-
-# ============================================================================
 # Configuration
-# ============================================================================
+
 
 CONFIG = CacheConfig(
     source_root="D:/GenBuster200k/processed/frames",
@@ -55,22 +41,20 @@ CONFIG = CacheConfig(
     num_frames=16,
     resolution=224,
     normalize=False,
-    num_workers=4,  # Reduced for stability
-    batch_size=50,  # More frequent checkpoints
+    num_workers=4,  
+    batch_size=50,  
     verify_integrity=True
 )
 
 # GPU Configuration
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-GPU_BATCH_SIZE = 32  # Process 32 videos simultaneously on GPU
-DISK_WRITER_THREADS = 2  # Controlled disk I/O
+GPU_BATCH_SIZE = 32  
+DISK_WRITER_THREADS = 2  
 
 CHECKPOINT_FILE = Path(CONFIG.cache_root) / "caching_checkpoint.json"
 
 
-# ============================================================================
 # Graceful Interruption Handler
-# ============================================================================
 
 class GracefulKiller:
     """Handle Ctrl+C gracefully and save checkpoint."""
@@ -81,13 +65,11 @@ class GracefulKiller:
         signal.signal(signal.SIGTERM, self.exit_gracefully)
     
     def exit_gracefully(self, *args):
-        print("\n\n⚠️  Interrupt received. Saving checkpoint...")
+        print("\n\n  Interrupt received. Saving checkpoint...")
         self.kill_now = True
 
 
-# ============================================================================
 # Robust Frame Loading with Validation
-# ============================================================================
 
 def load_single_frame(frame_path: Path) -> np.ndarray:
     """
@@ -242,9 +224,6 @@ def process_video_batch_gpu(video_batch: list, config: CacheConfig) -> list:
     if not loaded_tensors:
         return results
     
-    # Move batch to GPU for accelerated processing (if needed)
-    # For now, tensors are already validated on CPU
-    # GPU acceleration would apply to normalization, augmentation, etc.
     
     # Save each tensor with atomic writes
     cache_manager = CacheManager(
@@ -287,7 +266,7 @@ def process_video_batch_gpu(video_batch: list, config: CacheConfig) -> list:
                 )
                 
                 if verify_result is None:
-                    # Save succeeded but verification failed - delete corrupt file
+            
                     if meta['cache_path'].exists():
                         meta['cache_path'].unlink()
                     result['error'] = "Post-save verification failed"
@@ -320,9 +299,7 @@ def process_video_batch_gpu(video_batch: list, config: CacheConfig) -> list:
     return results
 
 
-# ============================================================================
 # Controlled Disk I/O Writer
-# ============================================================================
 
 class DiskWriterPool:
     """
@@ -398,9 +375,7 @@ class DiskWriterPool:
         logger.info("DiskWriterPool shut down")
 
 
-# ============================================================================
 # Checkpoint Management
-# ============================================================================
 
 def load_checkpoint() -> set:
     """Load checkpoint of already processed videos."""
@@ -435,10 +410,7 @@ def save_checkpoint(processed_videos: set, stats: dict):
     except Exception as e:
         logger.error(f"Failed to save checkpoint: {e}")
 
-
-# ============================================================================
 # Main Caching Pipeline
-# ============================================================================
 
 def collect_video_folders() -> list:
     """Collect all video folders from source directory."""
@@ -506,7 +478,7 @@ def main():
     ]
     
     if not tasks_to_process:
-        print("\n✅ All videos already cached!")
+        print("\n All videos already cached!")
         return 0
     
     logger.info(f"Videos remaining: {len(tasks_to_process)}")
@@ -583,25 +555,25 @@ def main():
     print(f"{'CACHING SUMMARY':^80}")
     print("="*80)
     print(f"  Total videos: {stats['total']:,}")
-    print(f"  ✅ Successfully cached: {stats['success']:,}")
-    print(f"  ⊘ Skipped (already done): {stats['skipped']:,}")
-    print(f"  ❌ Failed: {stats['failed']:,}")
-    print(f"\n  ⏱️  Time elapsed: {elapsed/3600:.2f} hours ({elapsed/60:.1f} minutes)")
+    print(f"   Successfully cached: {stats['success']:,}")
+    print(f"   Skipped (already done): {stats['skipped']:,}")
+    print(f"  Failed: {stats['failed']:,}")
+    print(f"\n    Time elapsed: {elapsed/3600:.2f} hours ({elapsed/60:.1f} minutes)")
     
     if stats['success'] > 0:
         speed = stats['success'] / elapsed
-        print(f"  ⚡ Average speed: {speed:.2f} videos/second")
+        print(f"   Average speed: {speed:.2f} videos/second")
     
     print("="*80)
     
     if stats['failed'] > 0:
-        print(f"\n⚠️  {stats['failed']} videos failed to cache.")
+        print(f"\n  {stats['failed']} videos failed to cache.")
         print("   Check logs for details. These videos will be skipped during training.")
         print("   To retry failed videos, delete checkpoint and re-run.")
     else:
-        print("\n✅ All videos cached successfully!")
+        print("\n All videos cached successfully!")
     
-    print(f"\n📂 Cached data location: {CONFIG.cache_root}")
+    print(f"\n Cached data location: {CONFIG.cache_root}")
     print("="*80 + "\n")
     
     return 0 if stats['failed'] == 0 else 1
