@@ -1,11 +1,17 @@
 ### Repository Initialization
-Set up base repository structure, environment configuration, and reproducibility utilities. Verified Pytorch GPU setup and mixed-precision policy with smoke tests.
+- Set up base repository structure, environment configuration, and reproducibility utilities. 
+- Verified Pytorch GPU setup and mixed-precision policy with smoke tests.
 
 ### CI and Dataset Scaffolding 
-Added GitHub Actions CI pipeline for linting and unit tests. Configured flake8 style enforcement. Implemented initial dataset scaffold with synthetic sample generation and basic pytest verification. Repository now ready for automated testing workflow.
+- Added GitHub Actions CI pipeline for linting and unit tests. 
+- Configured flake8 style enforcement. 
+- Implemented initial dataset scaffold with synthetic sample generation and basic pytest verification. 
+- Repository now ready for automated testing workflow.
 
 ### Dataset Integration & Preprocessing
-Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stratified sampling to balanced 50K subset. Added memory-efficient FrameExtractor (streaming, 1 FPS, 8–16 frame cap, auto-resize 224/256), PyTorch Dataset/DataLoader with lightweight augmentations and caching (.pt), debug dataset generator (100 items), and VRAM monitor with batch-size recommendation. Tests and smoke-run scripts added for fast local validation.
+- Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stratified sampling to balanced 50K subset. 
+- Added memory-efficient FrameExtractor (streaming, 1 FPS, 8–16 frame cap, auto-resize 224/256), PyTorch Dataset/DataLoader with lightweight augmentations and caching (.pt), debug dataset generator (100 items), and VRAM monitor with batch-size recommendation. 
+-Tests and smoke-run scripts added for fast local validation.
 
 ### Data Pipeline Finalization
 - Automated full pipeline: download → extract → cache
@@ -24,6 +30,14 @@ Implemented GenBuster-first preprocessing pipeline: Hugging Face download + stra
 - Solved color diffusion issue to ensure **full color fidelity** in extracted frames.
 - Enforced **16-frame consistency** across variable-length videos.
 - Optimized temp handling (SSD-based cache) and automatic cleanup post-extraction.
+
+### Video Caching Completed
+
+- Implemented a GPU-accelerated tensor caching pipeline to convert 210K video frame folders into .pt tensors for fast training.
+- Each cache file is saved with atomic writes, checksum verification, and automatic cleanup of failed or partial saves.
+- Completed 210,000 videos in 3.6 hours with only 1 verified failure (auto-removed to maintain integrity).
+- Checkpointing and integrity checks ensure resumable caching, 0 file corruption, and fully GPU-ready data for training.
+
 
 
 
