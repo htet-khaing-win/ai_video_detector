@@ -4,6 +4,8 @@ torch==2.4.0
 torchvision==0.19.0
 torchaudio==2.4.0
 xformers==0.0.27.post2
+tensorboard
+pytorchvideo
 
 # Hugging Face and Transformers
 transformers==4.44.2
