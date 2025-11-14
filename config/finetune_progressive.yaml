@@ -1,0 +1,164 @@
+
+# Progressive Fine-Tuning Configuration (30 Epochs → 95%+ Target)
+# USAGE:
+#   python train_progressive.py --config config/finetune_progressive.yaml
+
+# Experiment metadata
+experiment:
+  name: "x3d_m_finetune_progressive_2"
+  description: "Progressive fine-tuning from 79.42% baseline"
+  output_dir: "C:/Personal project/ai_video_detector/experiments"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  name: "x3d_m"
+  num_classes: 2
+  pretrained: true
+  dropout_rate: 0.35              # Higher dropout for regularization
+  freeze_backbone: true          # Initial state (script unfreezes progressively)
+
+# ============================================================================
+# TRAINING CONFIGURATION (30 EPOCHS)
+# ============================================================================
+training:
+  num_epochs: 35                 # Extended training for 95%+ target
+  
+  # Batch configuration - reduced for unfrozen model
+  batch_size: 16                 # Smaller batch for VRAM with unfrozen layers
+  gradient_accumulation_steps: 8 # Effective batch = 16 * 8 = 128
+  
+  # Data loading - optimized for disk streaming
+  num_workers: 8                 # High workers for parallel loading
+  pin_memory: true               # Fast CPU→GPU transfer
+  prefetch_factor: 4             # Aggressive prefetch
+  persistent_workers: true       # Keep workers alive (faster resume)
+  
+  # GPU optimization
+  use_amp: true                  # Mixed precision (essential for 8GB VRAM)
+  compile_model: false           # Disable torch.compile (compatibility)
+  
+  # Gradient management
+  max_grad_norm: 1.0             # Gradient clipping for stability
+  
+  # Checkpointing - important for stop/resume workflow
+  save_frequency: 1              # Save every epoch
+  keep_last_n: 10                # Keep more checkpoints for phase tracking
+
+# ============================================================================
+# OPTIMIZER CONFIGURATION
+# ============================================================================
+optimizer:
+  type: "adamw"
+  
+  # Base learning rate - script applies discriminative LR per layer
+  learning_rate: 0.000008         # 1e-5 base (adjusted per phase by script)
+  
+  # Regularization
+  weight_decay: 0.00015          # Stronger regularization for fine-tuning
+  
+  # AdamW parameters
+  betas: [0.9, 0.999]
+  eps: 0.0000001
+
+# ============================================================================
+# LEARNING RATE SCHEDULER
+# ============================================================================
+scheduler:
+  type: "cosine"                 # Cosine annealing with warmup
+  warmup_epochs: 3               # Longer warmup for stability
+  min_lr: 0.0000001              # Minimum LR (1e-7)
+  
+  # Alternative scheduler params (not used with cosine)
+  step_size: 10
+  gamma: 0.1
+  patience: 3
+  factor: 0.5
+
+# ============================================================================
+# LOSS FUNCTION
+# ============================================================================
+loss:
+  type: "cross_entropy"
+  label_smoothing: 0.05           # Moderate label smoothing for fine-tuning
+
+# ============================================================================
+# DATA AUGMENTATION
+# ============================================================================
+augmentation:
+  horizontal_flip: 0.5
+  color_jitter: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+
+# ============================================================================
+# DATASET PATHS
+# ============================================================================
+data:
+  preload_to_ram: false          # Use disk streaming (no RAM cache)
+  
+  # Cached tensors (CTHW format: [3, 16, 224, 224])
+  cache_root: "D:/GenBuster200k/processed/cached"
+  
+  # Metadata CSVs
+  train_csv: "C:/Personal project/ai_video_detector/data/splits/train_split.csv"
+  val_csv: "C:/Personal project/ai_video_detector/data/splits/val_split.csv"
+  
+  # Video properties
+  num_frames: 16
+  resolution: 224
+  
+  # Error handling
+  skip_missing_cache: true
+  max_skip_warnings: 10
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  verbose: true                  # Enable verbose logging for phase transitions
+  progress_bar: true             # Show tqdm progress bars
+  use_tensorboard: true          # TensorBoard logging
+  log_interval: 50
+  save_metrics_csv: true         # CSV metrics export
+
+# ============================================================================
+# HARDWARE CONFIGURATION
+# ============================================================================
+hardware:
+  device: "cuda"
+  gpu_id: 0
+  cudnn_benchmark: true          # Auto-tune kernels
+  cudnn_deterministic: false     # Prioritize speed
+  tf32_matmul: true              # Faster on Ampere GPUs
+  empty_cache_frequency: 50      # Clear GPU cache frequently
+
+# ============================================================================
+# REPRODUCIBILITY
+# ============================================================================
+seed: 42
+
+# ============================================================================
+# RESUME CONFIGURATION - LOAD FROM BEST BASELINE
+# ============================================================================
+resume:
+  enabled: true                  # Enable to load baseline weights
+  checkpoint_path: null # Load best baseline checkpoint
+  resume_mode: "latest"            
+
+# ============================================================================
+# VALIDATION
+# ============================================================================
+validation:
+  frequency: 1                   # Validate every epoch
+  save_predictions: false
+
+# ============================================================================
+# EARLY STOPPING
+# ============================================================================
+early_stopping:
+  enabled: true                  # Enable early stopping
+  patience: 6                   # Stop if no improvement for 10 epochs
+  min_delta: 0.002               # Require 0.2% improvement
